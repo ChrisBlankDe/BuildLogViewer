@@ -44,6 +44,10 @@ Typical URL:
 
 `https://<your-user-or-org>.github.io/AzurePipelinesLogViewer/`
 
+This repository is available at:
+
+`https://chrisblankde.github.io/BuildLogViewer/`
+
 ## Getting Azure Pipelines logs
 
 From Azure DevOps UI:
