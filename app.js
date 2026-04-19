@@ -575,10 +575,12 @@ function formatLogWithHighlighting(text) {
   function renderNodes(nodes) {
     return nodes.map((node) => {
       if (node.type === 'line') return node.html;
-      return `<details class="log-group" open>
-        <summary>${node.summaryHtml}</summary>
-        <div class="log-group-content">${renderNodes(node.children)}</div>
-      </details>`;
+      return [
+        '<details class="log-group" open>',
+        `<summary>${node.summaryHtml}</summary>`,
+        `<div class="log-group-content">${renderNodes(node.children)}</div>`,
+        '</details>',
+      ].join('');
     }).join('');
   }
 
