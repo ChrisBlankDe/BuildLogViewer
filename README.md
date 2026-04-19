@@ -44,7 +44,7 @@ Serve the repository root with GitHub Pages.
 
 Typical URL:
 
-`https://<your-user-or-org>.github.io/AzurePipelinesLogViewer/`
+`https://<your-user-or-org>.github.io/BuildLogViewer/`
 
 ## Getting Azure Pipelines logs
 
