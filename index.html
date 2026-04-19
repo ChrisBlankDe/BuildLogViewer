@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Azure Pipelines Log Viewer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <div id="headerSection">
+        <h1>Azure Pipelines Log Viewer</h1>
+        <p class="hint">Upload an Azure Pipelines logs ZIP to browse stages, jobs, tasks and raw logs.</p>
+
+        <div id="uploadArea" class="upload-area">
+          <div id="dropZone" class="drop-zone">
+            <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <p class="drop-text">Drop your ZIP file here</p>
+            <p class="or-text">or</p>
+            <label class="upload">
+              <span class="file-button">Choose File</span>
+              <input id="zipInput" type="file" accept=".zip,application/zip" />
+            </label>
+          </div>
+        </div>
+
+        <div id="status" class="status" aria-live="polite"></div>
+      </div>
+
+      <section id="viewer" class="viewer hidden" aria-label="Log viewer">
+        <aside>
+          <div class="panel-header">
+            <h2>Pipeline Structure</h2>
+            <div class="tree-controls">
+              <button id="expandAll" class="btn-icon" title="Expand All">▼</button>
+              <button id="collapseAll" class="btn-icon" title="Collapse All">▶</button>
+            </div>
+          </div>
+          <ul id="tree" class="tree"></ul>
+        </aside>
+        <section class="log-section">
+          <div class="log-header">
+            <h2 id="selectedTitle">Log Output</h2>
+            <div class="search-box">
+              <button id="toggleTimestamps" class="btn-icon" type="button" aria-pressed="false" title="Show timestamps">Show Timestamps</button>
+              <button id="toggleLineWrap" class="btn-icon" type="button" aria-pressed="true" title="Disable automatic line wrapping">Disable Wrap</button>
+              <input type="text" id="searchInput" placeholder="Search in logs..." />
+              <div class="search-nav">
+                <span id="searchCount"></span>
+                <button id="searchPrev" class="search-btn" disabled>↑</button>
+                <button id="searchNext" class="search-btn" disabled>↓</button>
+              </div>
+            </div>
+          </div>
+          <div class="log-container">
+            <pre id="logOutput" class="log-output">Select a task to view its log output.</pre>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="vendor/jszip.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
