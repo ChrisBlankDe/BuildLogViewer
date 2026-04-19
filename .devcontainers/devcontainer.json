@@ -11,7 +11,7 @@
   "customizations": {
     "vscode": {
       "extensions": [
-        "github.vscode-pull-request-github"
+        "github.vscode-pull-request-github","redhat.vscode-yaml"
       ],
       "settings": {
         "files.exclude": {
