@@ -38,6 +38,8 @@ const adoVsoSucceededWithIssuesPattern = /##vso\[task\.(?:complete|setresult)\b[
 const adoVsoFailedPattern              = /##vso\[task\.(?:complete|setresult)\b[^\]]*\bresult=Failed\b/i;
 const adoVsoSkippedPattern             = /##vso\[task\.(?:complete|setresult)\b[^\]]*\bresult=Skipped\b/i;
 const adoSkippedStepPattern            = /Skipping step due to condition evaluation\./i;
+const onePrefixedTaskWithInstancePattern = /^(1_.+)\s\((\d+)\)$/i;
+const initializeJobTaskPattern         = /^1_initialize job$/i;
 
 let currentStructure = null;
 let currentLogContent = '';
@@ -46,6 +48,7 @@ let currentMatchIndex = -1;
 let showTimestamps = false;
 let currentDependencyMetadata = null;
 let autoLineWrap = true;
+let currentActiveTreeElement = null;
 
 function setStatus(message, isError = false) {
   statusElement.textContent = message;
@@ -60,6 +63,52 @@ function getStageName(path) {
 function getTaskName(path) {
   const fileName = path.split('/').pop() || path;
   return fileName.replace(/\.txt$/i, '');
+}
+
+function extractBaseTaskName(taskName) {
+  const match = taskName.match(onePrefixedTaskWithInstancePattern);
+  return match ? match[1] : null;
+}
+
+// Annotates task entries in-place to mark hidden full-job logs and display-only prepare-job logs.
+function annotateSpecialJobLogs(tasks) {
+  const taskNames = new Set(tasks.map((taskInfo) => taskInfo.task));
+  const baseNamesWithInstances = new Set(
+    tasks
+      .map((taskInfo) => extractBaseTaskName(taskInfo.task))
+      .filter((baseName) => baseName && taskNames.has(baseName))
+  );
+
+  for (const taskInfo of tasks) {
+    const repeatedBaseName = extractBaseTaskName(taskInfo.task);
+    if (baseNamesWithInstances.has(taskInfo.task)) {
+      taskInfo.isAllLog = true;
+      continue;
+    }
+
+    if (repeatedBaseName && baseNamesWithInstances.has(repeatedBaseName)) {
+      taskInfo.isPrepareLog = true;
+      taskInfo.displayTask = '0_Prepare job';
+    }
+  }
+}
+
+function sortTaskInfos(tasks) {
+  const PRIORITY_PREPARE = 0;
+  const PRIORITY_INITIALIZE = 1;
+  const PRIORITY_REGULAR = 2;
+  const getPriority = (taskInfo) => {
+    if (taskInfo.isPrepareLog) return PRIORITY_PREPARE;
+    if (initializeJobTaskPattern.test(taskInfo.task)) return PRIORITY_INITIALIZE;
+    return PRIORITY_REGULAR;
+  };
+
+  tasks.sort((a, b) => {
+    const leftPriority = getPriority(a);
+    const rightPriority = getPriority(b);
+    if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+    return a.task.localeCompare(b.task, undefined, { numeric: true });
+  });
 }
 
 function parseTopLevelPipelineLogJobName(path) {
@@ -601,11 +650,31 @@ async function buildStructure(file) {
 
   for (const jobs of structure.values()) {
     for (const tasks of jobs.values()) {
-      tasks.sort((a, b) => a.task.localeCompare(b.task, undefined, { numeric: true }));
+      annotateSpecialJobLogs(tasks);
+      sortTaskInfos(tasks);
     }
   }
 
   return structure;
+}
+
+async function selectTask(taskInfo, activeElement) {
+  if (currentActiveTreeElement) {
+    currentActiveTreeElement.classList.remove('active');
+  }
+  activeElement.classList.add('active');
+  currentActiveTreeElement = activeElement;
+
+  selectedTitle.textContent = taskInfo.path;
+  logOutput.innerHTML = '<span class="log-line">Loading log...</span>';
+
+  const text = await taskInfo.entry.async('string');
+  currentLogContent = text;
+  displayLog(text);
+
+  // Clear search when switching logs
+  searchInput.value = '';
+  clearSearch();
 }
 
 function createTaskItem(taskInfo) {
@@ -625,23 +694,10 @@ function createTaskItem(taskInfo) {
   }
   
   button.type = 'button';
-  button.textContent = taskInfo.task;
+  button.textContent = taskInfo.displayTask || taskInfo.task;
 
   button.addEventListener('click', async () => {
-    // Remove active class from all items
-    document.querySelectorAll('.tree-item').forEach(item => item.classList.remove('active'));
-    button.classList.add('active');
-    
-    selectedTitle.textContent = taskInfo.path;
-    logOutput.innerHTML = '<span class="log-line">Loading log...</span>';
-    
-    const text = await taskInfo.entry.async('string');
-    currentLogContent = text;
-    displayLog(text);
-    
-    // Clear search when switching logs
-    searchInput.value = '';
-    clearSearch();
+    await selectTask(taskInfo, button);
   });
 
   listItem.appendChild(button);
@@ -678,6 +734,7 @@ function createCollapsibleNode(label, type) {
 function renderStructure(structure) {
   treeElement.innerHTML = '';
   currentStructure = structure;
+  currentActiveTreeElement = null;
 
   const sortedStages = sortStageNamesByDependencies([...structure.keys()]);
   for (const stageName of sortedStages) {
@@ -695,8 +752,22 @@ function renderStructure(structure) {
       jobItem.appendChild(jobNode);
 
       const tasksList = document.createElement('ul');
-      for (const taskInfo of tasks) {
+      const allTaskInfo = tasks.find((taskInfo) => taskInfo.isAllLog);
+      const visibleTasks = tasks.filter((taskInfo) => !taskInfo.isAllLog);
+      for (const taskInfo of visibleTasks) {
         tasksList.appendChild(createTaskItem(taskInfo));
+      }
+      if (allTaskInfo) {
+        const allLink = document.createElement('button');
+        allLink.type = 'button';
+        allLink.className = 'tree-inline-link';
+        allLink.textContent = '[all]';
+        allLink.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          await selectTask(allTaskInfo, allLink);
+        });
+        jobLabel.appendChild(document.createTextNode(' '));
+        jobLabel.appendChild(allLink);
       }
 
       const toggleJob = () => {
