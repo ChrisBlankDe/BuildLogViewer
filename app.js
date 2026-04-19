@@ -62,6 +62,47 @@ function getTaskName(path) {
   return fileName.replace(/\.txt$/i, '');
 }
 
+function getRepeatTaskBaseName(taskName) {
+  const match = taskName.match(/^(1_.+)\s\((\d+)\)$/i);
+  return match ? match[1] : null;
+}
+
+function annotateSpecialJobLogs(tasks) {
+  const repeatedTaskBaseNames = new Set(
+    tasks
+      .map((taskInfo) => getRepeatTaskBaseName(taskInfo.task))
+      .filter(Boolean)
+  );
+
+  for (const taskInfo of tasks) {
+    if (repeatedTaskBaseNames.has(taskInfo.task)) {
+      taskInfo.isAllLog = true;
+      continue;
+    }
+
+    if (getRepeatTaskBaseName(taskInfo.task)) {
+      taskInfo.isPrepareLog = true;
+      taskInfo.displayTask = 'prepare job';
+    }
+  }
+}
+
+function sortTaskInfos(tasks) {
+  const isInitializeJobTask = (taskName) => /^1_initialize job$/i.test(taskName);
+  const getPriority = (taskInfo) => {
+    if (taskInfo.isPrepareLog) return 0;
+    if (isInitializeJobTask(taskInfo.task)) return 1;
+    return 2;
+  };
+
+  tasks.sort((left, right) => {
+    const leftPriority = getPriority(left);
+    const rightPriority = getPriority(right);
+    if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+    return left.task.localeCompare(right.task, undefined, { numeric: true });
+  });
+}
+
 function parseTopLevelPipelineLogJobName(path) {
   const segments = path.split('/');
   if (segments.length !== 1) return null;
@@ -601,11 +642,28 @@ async function buildStructure(file) {
 
   for (const jobs of structure.values()) {
     for (const tasks of jobs.values()) {
-      tasks.sort((a, b) => a.task.localeCompare(b.task, undefined, { numeric: true }));
+      annotateSpecialJobLogs(tasks);
+      sortTaskInfos(tasks);
     }
   }
 
   return structure;
+}
+
+async function selectTask(taskInfo, activeElement) {
+  document.querySelectorAll('.tree-item, .tree-inline-link').forEach((item) => item.classList.remove('active'));
+  activeElement.classList.add('active');
+
+  selectedTitle.textContent = taskInfo.path;
+  logOutput.innerHTML = '<span class="log-line">Loading log...</span>';
+
+  const text = await taskInfo.entry.async('string');
+  currentLogContent = text;
+  displayLog(text);
+
+  // Clear search when switching logs
+  searchInput.value = '';
+  clearSearch();
 }
 
 function createTaskItem(taskInfo) {
@@ -625,23 +683,10 @@ function createTaskItem(taskInfo) {
   }
   
   button.type = 'button';
-  button.textContent = taskInfo.task;
+  button.textContent = taskInfo.displayTask || taskInfo.task;
 
   button.addEventListener('click', async () => {
-    // Remove active class from all items
-    document.querySelectorAll('.tree-item').forEach(item => item.classList.remove('active'));
-    button.classList.add('active');
-    
-    selectedTitle.textContent = taskInfo.path;
-    logOutput.innerHTML = '<span class="log-line">Loading log...</span>';
-    
-    const text = await taskInfo.entry.async('string');
-    currentLogContent = text;
-    displayLog(text);
-    
-    // Clear search when switching logs
-    searchInput.value = '';
-    clearSearch();
+    await selectTask(taskInfo, button);
   });
 
   listItem.appendChild(button);
@@ -695,8 +740,22 @@ function renderStructure(structure) {
       jobItem.appendChild(jobNode);
 
       const tasksList = document.createElement('ul');
-      for (const taskInfo of tasks) {
+      const allTaskInfo = tasks.find((taskInfo) => taskInfo.isAllLog);
+      const visibleTasks = tasks.filter((taskInfo) => !taskInfo.isAllLog);
+      for (const taskInfo of visibleTasks) {
         tasksList.appendChild(createTaskItem(taskInfo));
+      }
+      if (allTaskInfo) {
+        const allLink = document.createElement('button');
+        allLink.type = 'button';
+        allLink.className = 'tree-inline-link';
+        allLink.textContent = '[all]';
+        allLink.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          await selectTask(allTaskInfo, allLink);
+        });
+        jobLabel.appendChild(document.createTextNode(' '));
+        jobLabel.appendChild(allLink);
       }
 
       const toggleJob = () => {

@@ -253,6 +253,25 @@ h2 {
   color: var(--text-color);
 }
 
+.tree-inline-link {
+  border: 0;
+  background: transparent;
+  color: var(--primary-color);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+}
+
+.tree-inline-link:hover {
+  color: var(--primary-hover);
+}
+
+.tree-inline-link.active {
+  color: var(--primary-hover);
+}
+
 .tree-item {
   border: 0;
   background: transparent;
