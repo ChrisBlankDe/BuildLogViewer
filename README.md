@@ -4,6 +4,8 @@ A small browser app for reading Azure Pipelines log ZIP files.
 
 Drop in a downloaded log archive and browse stages, jobs, and tasks on the left while reading formatted logs on the right.
 
+Give it a try: https://chrisblankde.github.io/BuildLogViewer/
+
 ## Why this exists
 
 Azure DevOps logs are often easier to inspect with a focused viewer. This tool is static, lightweight, and runs entirely in the browser.
