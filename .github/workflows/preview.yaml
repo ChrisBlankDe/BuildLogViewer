@@ -20,5 +20,5 @@ jobs:
       - name: Deploy preview
         uses: rossjrw/pr-preview-action@v1
         with:
-          preview-branch: main
+          preview-branch: gh-pages
           qr-code: true
