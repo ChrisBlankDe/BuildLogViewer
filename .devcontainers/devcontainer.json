@@ -1,10 +1,10 @@
 {
-  "name": "AzurePipelinesLogViewer",
+  "name": "BuildLogViewer",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
   "forwardPorts": [8000],
   "portsAttributes": {
     "8000": {
-      "label": "AzurePipelinesLogViewer",
+      "label": "BuildLogViewer",
       "onAutoForward": "openPreview"
     }
   },
