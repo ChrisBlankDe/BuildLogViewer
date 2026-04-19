@@ -6,10 +6,6 @@ Drop in a downloaded log archive and browse stages, jobs, and tasks on the left 
 
 Give it a try: https://chrisblankde.github.io/BuildLogViewer/
 
-## Why this exists
-
-Azure DevOps logs are often easier to inspect with a focused viewer. This tool is static, lightweight, and runs entirely in the browser.
-
 ## What it can do
 
 - Upload log ZIP files by drag-and-drop or file picker
@@ -23,48 +19,6 @@ Azure DevOps logs are often easier to inspect with a focused viewer. This tool i
 ## Privacy
 
 All parsing happens client-side. No backend. No uploads.
-
-## Quick start
-
-### Run locally
-
-From the repository root, open `index.html` in your browser.
-
-If your browser blocks local file behavior, run a tiny static server:
-
-```bash
-python -m http.server 8000
-```
-
-Then open `http://localhost:8000`.
-
-### Use on GitHub Pages
-
-Serve the repository root with GitHub Pages.
-
-Typical URL:
-
-`https://<your-user-or-org>.github.io/BuildLogViewer/`
-
-## Getting Azure Pipelines logs
-
-From Azure DevOps UI:
-
-1. Open a pipeline run
-2. Open the `...` (More actions) menu
-3. Click **Download logs**
-
-Use that ZIP file directly in this viewer.
-
-## Development notes
-
-- No build step required
-- No framework dependency
-- Quick syntax check:
-
-```bash
-node --check app.js
-```
 
 ## Known limitations
 
