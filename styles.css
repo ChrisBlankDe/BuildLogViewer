@@ -37,6 +37,25 @@ h1 {
   font-weight: 600;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.repo-link {
+  color: var(--primary-color);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.repo-link:hover {
+  color: var(--primary-hover);
+  text-decoration: underline;
+}
+
 h2 {
   margin-top: 0;
   font-size: 1.25rem;
