@@ -38,6 +38,8 @@ const adoVsoSucceededWithIssuesPattern = /##vso\[task\.(?:complete|setresult)\b[
 const adoVsoFailedPattern              = /##vso\[task\.(?:complete|setresult)\b[^\]]*\bresult=Failed\b/i;
 const adoVsoSkippedPattern             = /##vso\[task\.(?:complete|setresult)\b[^\]]*\bresult=Skipped\b/i;
 const adoSkippedStepPattern            = /Skipping step due to condition evaluation\./i;
+const onePrefixedTaskWithInstancePattern = /^(1_.+)\s\((\d+)\)$/i;
+const initializeJobTaskPattern         = /^1_initialize job$/i;
 
 let currentStructure = null;
 let currentLogContent = '';
@@ -46,6 +48,7 @@ let currentMatchIndex = -1;
 let showTimestamps = false;
 let currentDependencyMetadata = null;
 let autoLineWrap = true;
+let currentActiveTreeElement = null;
 
 function setStatus(message, isError = false) {
   statusElement.textContent = message;
@@ -62,25 +65,28 @@ function getTaskName(path) {
   return fileName.replace(/\.txt$/i, '');
 }
 
-function getRepeatTaskBaseName(taskName) {
-  const match = taskName.match(/^(1_.+)\s\((\d+)\)$/i);
+function extractBaseTaskName(taskName) {
+  const match = taskName.match(onePrefixedTaskWithInstancePattern);
   return match ? match[1] : null;
 }
 
+// Annotates task entries in-place to mark hidden full-job logs and display-only prepare-job logs.
 function annotateSpecialJobLogs(tasks) {
-  const repeatedTaskBaseNames = new Set(
+  const taskNames = new Set(tasks.map((taskInfo) => taskInfo.task));
+  const baseNamesWithInstances = new Set(
     tasks
-      .map((taskInfo) => getRepeatTaskBaseName(taskInfo.task))
-      .filter(Boolean)
+      .map((taskInfo) => extractBaseTaskName(taskInfo.task))
+      .filter((baseName) => baseName && taskNames.has(baseName))
   );
 
   for (const taskInfo of tasks) {
-    if (repeatedTaskBaseNames.has(taskInfo.task)) {
+    const repeatedBaseName = extractBaseTaskName(taskInfo.task);
+    if (baseNamesWithInstances.has(taskInfo.task)) {
       taskInfo.isAllLog = true;
       continue;
     }
 
-    if (getRepeatTaskBaseName(taskInfo.task)) {
+    if (repeatedBaseName && baseNamesWithInstances.has(repeatedBaseName)) {
       taskInfo.isPrepareLog = true;
       taskInfo.displayTask = 'prepare job';
     }
@@ -88,18 +94,20 @@ function annotateSpecialJobLogs(tasks) {
 }
 
 function sortTaskInfos(tasks) {
-  const isInitializeJobTask = (taskName) => /^1_initialize job$/i.test(taskName);
+  const PRIORITY_PREPARE = 0;
+  const PRIORITY_INITIALIZE = 1;
+  const PRIORITY_REGULAR = 2;
   const getPriority = (taskInfo) => {
-    if (taskInfo.isPrepareLog) return 0;
-    if (isInitializeJobTask(taskInfo.task)) return 1;
-    return 2;
+    if (taskInfo.isPrepareLog) return PRIORITY_PREPARE;
+    if (initializeJobTaskPattern.test(taskInfo.task)) return PRIORITY_INITIALIZE;
+    return PRIORITY_REGULAR;
   };
 
-  tasks.sort((left, right) => {
-    const leftPriority = getPriority(left);
-    const rightPriority = getPriority(right);
+  tasks.sort((a, b) => {
+    const leftPriority = getPriority(a);
+    const rightPriority = getPriority(b);
     if (leftPriority !== rightPriority) return leftPriority - rightPriority;
-    return left.task.localeCompare(right.task, undefined, { numeric: true });
+    return a.task.localeCompare(b.task, undefined, { numeric: true });
   });
 }
 
@@ -651,8 +659,11 @@ async function buildStructure(file) {
 }
 
 async function selectTask(taskInfo, activeElement) {
-  document.querySelectorAll('.tree-item, .tree-inline-link').forEach((item) => item.classList.remove('active'));
+  if (currentActiveTreeElement) {
+    currentActiveTreeElement.classList.remove('active');
+  }
   activeElement.classList.add('active');
+  currentActiveTreeElement = activeElement;
 
   selectedTitle.textContent = taskInfo.path;
   logOutput.innerHTML = '<span class="log-line">Loading log...</span>';
@@ -723,6 +734,7 @@ function createCollapsibleNode(label, type) {
 function renderStructure(structure) {
   treeElement.innerHTML = '';
   currentStructure = structure;
+  currentActiveTreeElement = null;
 
   const sortedStages = sortStageNamesByDependencies([...structure.keys()]);
   for (const stageName of sortedStages) {
