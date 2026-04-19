@@ -88,7 +88,7 @@ function annotateSpecialJobLogs(tasks) {
 
     if (repeatedBaseName && baseNamesWithInstances.has(repeatedBaseName)) {
       taskInfo.isPrepareLog = true;
-      taskInfo.displayTask = 'prepare job';
+      taskInfo.displayTask = '0_Prepare job';
     }
   }
 }
