@@ -1,4 +1,4 @@
-# Azure Pipelines Log Viewer
+# Build Log Viewer
 
 A small browser app for reading Azure Pipelines log ZIP files.
 
