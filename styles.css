@@ -399,7 +399,6 @@ h2 {
   font-size: 0.875rem;
   line-height: 1.25;
   min-height: 100%;
-  counter-reset: line;
 }
 
 .log-output.no-wrap {
@@ -413,8 +412,7 @@ h2 {
 }
 
 .log-line::before {
-  counter-increment: line;
-  content: counter(line);
+  content: attr(data-line-number);
   position: absolute;
   left: 0;
   width: 3rem;

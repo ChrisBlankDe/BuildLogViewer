@@ -531,29 +531,30 @@ function formatLogWithHighlighting(text) {
   const root = { type: 'root', children: [] };
   const stack = [root];
 
-  function appendLine(lineText) {
+  function appendLine(lineText, lineNumber) {
     const displayLine = showTimestamps ? lineText : removeTimestampPrefix(lineText);
     const className = highlightLogLine(displayLine);
     const classSuffix = className ? ` ${className}` : '';
     stack[stack.length - 1].children.push({
       type: 'line',
-      html: `<span class="log-line${classSuffix}">${escapeHtml(displayLine)}</span>`,
+      html: `<span class="log-line${classSuffix}" data-line-number="${lineNumber}">${escapeHtml(displayLine)}</span>`,
     });
   }
 
-  for (const line of lines) {
+  lines.forEach((line, index) => {
+    const lineNumber = index + 1;
     const stripped = removeTimestampPrefix(line).trimStart();
     if (/^##\[group\]/.test(stripped)) {
       const displayLine = showTimestamps ? line : removeTimestampPrefix(line);
       const displayText = displayLine.trimStart();
       const groupNode = {
         type: 'group',
-        summaryHtml: `<span class="log-line log-group-summary group"><span class="log-group-toggle">▶</span>${escapeHtml(displayText)}</span>`,
+        summaryHtml: `<span class="log-line log-group-summary group" data-line-number="${lineNumber}"><span class="log-group-toggle">▶</span>${escapeHtml(displayText)}</span>`,
         children: [],
       };
       stack[stack.length - 1].children.push(groupNode);
       stack.push(groupNode);
-      continue;
+      return;
     }
 
     if (/^##\[endgroup\]\s*$/.test(stripped)) {
@@ -561,16 +562,16 @@ function formatLogWithHighlighting(text) {
       const displayText = displayLine.trimStart();
       stack[stack.length - 1].children.push({
         type: 'line',
-        html: `<span class="log-line group">${escapeHtml(displayText)}</span>`,
+        html: `<span class="log-line group" data-line-number="${lineNumber}">${escapeHtml(displayText)}</span>`,
       });
       if (stack.length > 1) {
         stack.pop();
       }
-      continue;
+      return;
     }
 
-    appendLine(line);
-  }
+    appendLine(line, lineNumber);
+  });
 
   function renderNodes(nodes) {
     return nodes.map((node) => {
