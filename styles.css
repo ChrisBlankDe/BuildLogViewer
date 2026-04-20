@@ -495,7 +495,6 @@ details.log-group[open] > summary .log-group-toggle {
 }
 
 .log-group-content {
-  margin-left: 1rem;
   border-left: 1px solid rgba(255, 255, 255, 0.15);
 }
 
