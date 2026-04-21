@@ -44,11 +44,13 @@ const initializeJobTaskPattern         = /^1_initialize job$/i;
 
 // GitHub Actions workflow command patterns
 // Reference: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions
-const ghCommandPattern = /^\[command\]/;
-const ghErrorPattern   = /^::error\b/i;
-const ghWarningPattern = /^::warning\b/i;
-const ghNoticePattern  = /^::notice\b/i;
-const ghDebugPattern   = /^::debug\b/i;
+const ghCommandPattern  = /^\[command\]/;
+const ghErrorPattern    = /^::error\b/i;
+const ghWarningPattern  = /^::warning\b/i;
+const ghNoticePattern   = /^::notice\b/i;
+const ghDebugPattern    = /^::debug\b/i;
+const ghGroupPattern    = /^::group::/i;
+const ghEndGroupPattern = /^::endgroup::\s*$/i;
 
 let currentStructure = null;
 let currentLogContent = '';
@@ -542,6 +544,7 @@ function highlightLogLine(line) {
   if (ghWarningPattern.test(stripped)) return 'warning';
   if (ghNoticePattern.test(stripped)) return 'info';
   if (ghDebugPattern.test(stripped)) return 'debug';
+  if (ghGroupPattern.test(stripped) || ghEndGroupPattern.test(stripped)) return 'group';
 
   // Plain timestamp lines (no special marker)
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(line) || /^\[\d{2}:\d{2}:\d{2}\]/.test(line)) {
@@ -576,7 +579,12 @@ function formatLogWithHighlighting(text) {
   lines.forEach((line, index) => {
     const lineNumber = index + 1;
     const stripped = removeTimestampPrefix(line).trimStart();
-    if (/^##\[group\]/.test(stripped)) {
+
+    // ADO-style group start: ##[group]title
+    // GH-style group start:  ::group::title
+    const adoGroupStart = /^##\[group\]/.test(stripped);
+    const ghGroupStart  = ghGroupPattern.test(stripped);
+    if (adoGroupStart || ghGroupStart) {
       const displayLine = showTimestamps ? line : removeTimestampPrefix(line);
       const displayText = displayLine.trimStart();
       const groupNode = {
@@ -589,7 +597,11 @@ function formatLogWithHighlighting(text) {
       return;
     }
 
-    if (/^##\[endgroup\]\s*$/.test(stripped)) {
+    // ADO-style group end: ##[endgroup]
+    // GH-style group end:  ::endgroup::
+    const adoGroupEnd = /^##\[endgroup\]\s*$/.test(stripped);
+    const ghGroupEnd  = ghEndGroupPattern.test(stripped);
+    if (adoGroupEnd || ghGroupEnd) {
       const displayLine = showTimestamps ? line : removeTimestampPrefix(line);
       const displayText = displayLine.trimStart();
       stack[stack.length - 1].children.push({
