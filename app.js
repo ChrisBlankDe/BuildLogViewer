@@ -16,6 +16,7 @@ const expandAllBtn = document.getElementById('expandAll');
 const collapseAllBtn = document.getElementById('collapseAll');
 const DEFAULT_JOB_NAME = 'Default Job';
 const NORMALIZED_DEFAULT_JOB_NAME = normalizeDependencyName(DEFAULT_JOB_NAME);
+const GITHUB_STAGE = 'Workflow';
 const isoTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/;
 const bracketedTimePattern = /^\[\d{2}:\d{2}:\d{2}(?:\.\d+)?\]/;
 
@@ -40,6 +41,14 @@ const adoVsoSkippedPattern             = /##vso\[task\.(?:complete|setresult)\b[
 const adoSkippedStepPattern            = /Skipping step due to condition evaluation\./i;
 const onePrefixedTaskWithInstancePattern = /^(1_.+)\s\((\d+)\)$/i;
 const initializeJobTaskPattern         = /^1_initialize job$/i;
+
+// GitHub Actions workflow command patterns
+// Reference: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions
+const ghCommandPattern = /^\[command\]/;
+const ghErrorPattern   = /^::error\b/i;
+const ghWarningPattern = /^::warning\b/i;
+const ghNoticePattern  = /^::notice\b/i;
+const ghDebugPattern   = /^::debug\b/i;
 
 let currentStructure = null;
 let currentLogContent = '';
@@ -137,6 +146,15 @@ function stageSort(left, right) {
   if (left === 'Pipeline') return -1;
   if (right === 'Pipeline') return 1;
   return left.localeCompare(right);
+}
+
+function detectProvider(zip) {
+  const fileNames = Object.keys(zip.files);
+  const isAdo = fileNames.some((name) =>
+    name.startsWith('Agent Diagnostic Logs/') ||
+    name.toLowerCase().endsWith('azure-pipelines-expanded.yaml')
+  );
+  return isAdo ? 'ado' : 'github';
 }
 
 function normalizeDependencyName(value) {
@@ -465,6 +483,11 @@ function analyzeLogContent(text) {
     if (!isSkipped && (adoVsoSkippedPattern.test(line) || adoSkippedStepPattern.test(line))) {
       isSkipped = true;
     }
+    if (!hasErrors || !hasWarnings) {
+      const stripped = removeTimestampPrefix(line).trimStart();
+      if (!hasErrors && ghErrorPattern.test(stripped)) hasErrors = true;
+      if (!hasWarnings && ghWarningPattern.test(stripped)) hasWarnings = true;
+    }
     if (hasErrors && hasWarnings && isSkipped) break;
   }
 
@@ -492,7 +515,7 @@ function highlightLogLine(line) {
     return 'section';
   }
 
-  // ##[command] — command being executed
+  // ##[command] — command being executed (ADO)
   if (adoCommandPattern.test(line)) {
     return 'command';
   }
@@ -512,7 +535,15 @@ function highlightLogLine(line) {
     return 'group';
   }
 
-  // Plain timestamp lines (no special ADO marker)
+  // GitHub Actions patterns — match on content after stripping timestamp prefix
+  const stripped = removeTimestampPrefix(line).trimStart();
+  if (ghCommandPattern.test(stripped)) return 'command';
+  if (ghErrorPattern.test(stripped)) return 'error';
+  if (ghWarningPattern.test(stripped)) return 'warning';
+  if (ghNoticePattern.test(stripped)) return 'info';
+  if (ghDebugPattern.test(stripped)) return 'debug';
+
+  // Plain timestamp lines (no special marker)
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(line) || /^\[\d{2}:\d{2}:\d{2}\]/.test(line)) {
     return 'timestamp';
   }
@@ -522,6 +553,7 @@ function highlightLogLine(line) {
 
 function removeTimestampPrefix(line) {
   return line
+    .replace(/^\uFEFF/, '')
     .replace(isoTimestampPattern, '')
     .replace(bracketedTimePattern, '');
 }
@@ -594,8 +626,7 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-async function buildStructure(file) {
-  const zip = await JSZip.loadAsync(file);
+async function buildAdoStructure(zip) {
   const entries = Object.values(zip.files).filter((entry) => !entry.dir && entry.name.toLowerCase().endsWith('.txt'));
   const structure = new Map();
   currentDependencyMetadata = null;
@@ -659,6 +690,98 @@ async function buildStructure(file) {
   }
 
   return structure;
+}
+
+async function buildGithubStructure(zip) {
+  const structure = new Map();
+  currentDependencyMetadata = null;
+
+  // Collect root-level aggregate logs (n_JobName.txt) and per-step logs (JobName/n_StepName.txt).
+  const rootLogs = new Map();
+  const stepLogs = new Map();
+
+  for (const entry of Object.values(zip.files)) {
+    if (entry.dir || !entry.name.toLowerCase().endsWith('.txt')) continue;
+    const segments = entry.name.split('/');
+    if (segments.length === 1) {
+      const match = segments[0].match(/^\d+_(.+)\.txt$/i);
+      if (match) rootLogs.set(match[1], { fileName: segments[0], entry });
+    } else if (segments.length === 2) {
+      const [jobDir, fileName] = segments;
+      if (fileName.toLowerCase() === 'system.txt') continue;
+      if (!/^\d+_.+\.txt$/i.test(fileName)) continue;
+      if (!stepLogs.has(jobDir)) stepLogs.set(jobDir, []);
+      stepLogs.get(jobDir).push({ fileName, entry });
+    }
+  }
+
+  const allJobNames = new Set([...rootLogs.keys(), ...stepLogs.keys()]);
+  if (allJobNames.size === 0) return structure;
+
+  // Determine display order from the numeric prefix of each root aggregate file.
+  const jobOrder = new Map();
+  for (const [jobName, { fileName }] of rootLogs.entries()) {
+    const numMatch = fileName.match(/^(\d+)_/);
+    if (numMatch) jobOrder.set(jobName, parseInt(numMatch[1], 10));
+  }
+  const sortedJobNames = [...allJobNames].sort((a, b) => {
+    const orderA = jobOrder.get(a) ?? Infinity;
+    const orderB = jobOrder.get(b) ?? Infinity;
+    if (orderA !== orderB) return orderA - orderB;
+    return a.localeCompare(b);
+  });
+
+  structure.set(GITHUB_STAGE, new Map());
+  const jobs = structure.get(GITHUB_STAGE);
+
+  for (const jobName of sortedJobNames) {
+    jobs.set(jobName, []);
+    const tasks = jobs.get(jobName);
+
+    // Add individual step logs.
+    const steps = stepLogs.get(jobName) || [];
+    for (const step of steps) {
+      const logText = await step.entry.async('string');
+      const analysis = analyzeLogContent(logText);
+      tasks.push({
+        task: step.fileName.replace(/\.txt$/i, ''),
+        path: `${jobName}/${step.fileName}`,
+        entry: step.entry,
+        hasErrors: analysis.hasErrors,
+        hasWarnings: analysis.hasWarnings,
+        isSkipped: analysis.isSkipped,
+      });
+    }
+
+    // Add aggregate log, marking it as [all] only when individual steps are also present.
+    const rootLog = rootLogs.get(jobName);
+    if (rootLog) {
+      const logText = await rootLog.entry.async('string');
+      const analysis = analyzeLogContent(logText);
+      tasks.push({
+        task: rootLog.fileName.replace(/\.txt$/i, ''),
+        path: rootLog.fileName,
+        entry: rootLog.entry,
+        hasErrors: analysis.hasErrors,
+        hasWarnings: analysis.hasWarnings,
+        isSkipped: analysis.isSkipped,
+        isAllLog: steps.length > 0,
+      });
+    }
+
+    sortTaskInfos(tasks);
+  }
+
+  return structure;
+}
+
+async function buildStructure(file) {
+  const zip = await JSZip.loadAsync(file);
+  const provider = detectProvider(zip);
+  if (provider === 'ado') {
+    return buildAdoStructure(zip);
+  }
+  return buildGithubStructure(zip);
 }
 
 async function selectTask(taskInfo, activeElement) {
@@ -993,7 +1116,7 @@ async function handleFileUpload(file) {
     console.error(error);
     headerSection.classList.remove('hidden');
     dropZone.classList.remove('minimized');
-    setStatus('Failed to read ZIP file. Please upload a valid Azure Pipelines log ZIP.', true);
+    setStatus('Failed to read ZIP file. Please upload a valid Azure Pipelines or GitHub Actions log ZIP.', true);
   }
 }
 
