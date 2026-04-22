@@ -15,6 +15,18 @@
       "isBackground": true,
       "problemMatcher": [],
       "group": "build"
+    },
+     {
+      "label": "Open index.html",
+      "type": "shell",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "start index.html"
+      ],
+      "isBackground": true,
+      "problemMatcher": [],
+      "group": "build"
     }
   ]
 }
