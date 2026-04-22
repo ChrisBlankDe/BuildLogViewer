@@ -469,6 +469,32 @@ function sortJobNamesByDependencies(stageName, jobNames) {
   );
 }
 
+function getJobFirstTimestamp(tasks) {
+  // Prefer individual (non-aggregate) step logs; fall back to aggregate log.
+  const candidates = (tasks.filter((t) => !t.isAllLog).length > 0
+    ? tasks.filter((t) => !t.isAllLog)
+    : tasks
+  ).map((t) => t.firstTimestamp).filter(Boolean);
+  if (candidates.length === 0) return null;
+  return candidates.reduce((min, ts) => (ts < min ? ts : min));
+}
+
+function sortJobsByStartTime(stageName, jobs) {
+  const jobNames = [...jobs.keys()];
+  const hasTimestamps = jobNames.some((name) => getJobFirstTimestamp(jobs.get(name)) !== null);
+  if (!hasTimestamps) {
+    return sortJobNamesByDependencies(stageName, jobNames);
+  }
+  return [...jobNames].sort((a, b) => {
+    const tsA = getJobFirstTimestamp(jobs.get(a));
+    const tsB = getJobFirstTimestamp(jobs.get(b));
+    if (tsA && tsB) return tsA.localeCompare(tsB);
+    if (tsA) return -1;
+    if (tsB) return 1;
+    return a.localeCompare(b, undefined, { numeric: true });
+  });
+}
+
 function analyzeLogContent(text) {
   const lines = text.split('\n');
   let hasErrors = false;
@@ -559,6 +585,14 @@ function removeTimestampPrefix(line) {
     .replace(/^\uFEFF/, '')
     .replace(isoTimestampPattern, '')
     .replace(bracketedTimePattern, '');
+}
+
+function extractFirstTimestamp(text) {
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.replace(/^\uFEFF/, '').match(isoTimestampPattern);
+    if (match) return match[0];
+  }
+  return null;
 }
 
 function formatLogWithHighlighting(text) {
@@ -691,6 +725,7 @@ async function buildAdoStructure(zip) {
       hasErrors: analysis.hasErrors,
       hasWarnings: analysis.hasWarnings,
       isSkipped: analysis.isSkipped,
+      firstTimestamp: extractFirstTimestamp(logText),
     });
   }
 
@@ -762,6 +797,7 @@ async function buildGithubStructure(zip) {
         hasErrors: analysis.hasErrors,
         hasWarnings: analysis.hasWarnings,
         isSkipped: analysis.isSkipped,
+        firstTimestamp: extractFirstTimestamp(logText),
       });
     }
 
@@ -778,6 +814,7 @@ async function buildGithubStructure(zip) {
         hasWarnings: analysis.hasWarnings,
         isSkipped: analysis.isSkipped,
         isAllLog: steps.length > 0,
+        firstTimestamp: extractFirstTimestamp(logText),
       });
     }
 
@@ -882,7 +919,7 @@ function renderStructure(structure) {
 
     const jobsList = document.createElement('ul');
     const jobs = structure.get(stageName);
-    const sortedJobNames = sortJobNamesByDependencies(stageName, [...jobs.keys()]);
+    const sortedJobNames = sortJobsByStartTime(stageName, jobs);
     for (const jobName of sortedJobNames) {
       const tasks = jobs.get(jobName);
       const jobItem = document.createElement('li');
