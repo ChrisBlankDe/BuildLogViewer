@@ -7,6 +7,7 @@ const treeElement = document.getElementById('tree');
 const selectedTitle = document.getElementById('selectedTitle');
 const logOutput = document.getElementById('logOutput');
 const searchInput = document.getElementById('searchInput');
+const goToFailure = document.getElementById('goToFailure');
 const searchCount = document.getElementById('searchCount');
 const searchPrev = document.getElementById('searchPrev');
 const searchNext = document.getElementById('searchNext');
@@ -846,6 +847,7 @@ async function selectTask(taskInfo, activeElement) {
   const text = await taskInfo.entry.async('string');
   currentLogContent = text;
   displayLog(text);
+  goToFailure.disabled = !logOutput.querySelector('.log-line.error');
 
   // Clear search when switching logs
   searchInput.value = '';
@@ -885,6 +887,21 @@ function displayLog(text) {
     return;
   }
   logOutput.innerHTML = formatLogWithHighlighting(text);
+}
+
+function goToFirstFailure() {
+  const failureLine = logOutput.querySelector('.log-line.error');
+  if (!failureLine) return;
+
+  let parent = failureLine.parentElement;
+  while (parent) {
+    if (parent.tagName === 'DETAILS') {
+      parent.open = true;
+    }
+    parent = parent.parentElement;
+  }
+
+  failureLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function createCollapsibleNode(label, type) {
@@ -1137,6 +1154,7 @@ async function handleFileUpload(file) {
   selectedTitle.textContent = 'Log Output';
   logOutput.innerHTML = '<span class="log-line">Select a task to view its log output.</span>';
   currentLogContent = '';
+  goToFailure.disabled = true;
   clearSearch();
 
   if (!file) {
@@ -1179,6 +1197,7 @@ expandAllBtn.addEventListener('click', expandAll);
 collapseAllBtn.addEventListener('click', collapseAll);
 
 searchInput.addEventListener('input', performSearch);
+goToFailure.addEventListener('click', goToFirstFailure);
 searchPrev.addEventListener('click', () => {
   if (currentMatchIndex > 0) {
     currentMatchIndex--;
