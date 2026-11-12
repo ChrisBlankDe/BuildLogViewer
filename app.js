@@ -1252,7 +1252,25 @@ async function loadFromUrlParam() {
     console.error(error);
     headerSection.classList.remove('hidden');
     dropZone.classList.remove('minimized');
-    setStatus('Failed to download the log file. The server may block cross-origin (CORS) requests; download it and upload it manually instead.', true);
+    setStatus('Failed to download the log file. The server may block cross-origin (CORS) requests. You can ');
+    let downloadUrl;
+    try {
+      downloadUrl = new URL(url, window.location.href);
+    } catch {
+      downloadUrl = null;
+    }
+    if (downloadUrl && (downloadUrl.protocol === 'http:' || downloadUrl.protocol === 'https:')) {
+      const link = document.createElement('a');
+      link.href = downloadUrl.href;
+      link.textContent = 'download the file directly';
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      statusElement.append(link);
+      statusElement.append(' and upload it manually instead.');
+    } else {
+      statusElement.append('download the file manually and upload it instead.');
+    }
+    statusElement.classList.add('error');
   }
 }
 
