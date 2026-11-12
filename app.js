@@ -1234,3 +1234,26 @@ toggleLineWrapBtn.addEventListener('click', () => {
 updateTimestampToggleButton();
 updateLineWrapToggleButton();
 applyLogLineWrap();
+
+async function loadFromUrlParam() {
+  const params = new URLSearchParams(window.location.search);
+  const url = params.get('url') || params.get('logs');
+  if (!url) return;
+
+  setStatus('Downloading log file...');
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const blob = await response.blob();
+    await handleFileUpload(blob);
+  } catch (error) {
+    console.error(error);
+    headerSection.classList.remove('hidden');
+    dropZone.classList.remove('minimized');
+    setStatus('Failed to download the log file. The server may block cross-origin (CORS) requests; download it and upload it manually instead.', true);
+  }
+}
+
+loadFromUrlParam();
