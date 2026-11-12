@@ -9,6 +9,7 @@ Give it a try: https://chrisblankde.github.io/BuildLogViewer/
 ## What it can do
 
 - Upload log ZIP files by drag-and-drop or file picker
+- Load a ZIP from a URL: `?url=https://example.com/logs.zip` (the host must allow cross-origin requests)
 - Supports Azure Pipelines and GitHub Actions log archives
 - Show pipeline structure (stage/job/task) in a collapsible tree
 - Highlight errors, warnings, timestamps, and success messages
